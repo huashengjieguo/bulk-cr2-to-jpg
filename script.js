@@ -16,6 +16,14 @@ document.addEventListener('DOMContentLoaded', function() {
     uploadArea.addEventListener('dragleave', handleDragLeave);
     uploadArea.addEventListener('drop', handleDrop);
     uploadArea.addEventListener('click', () => fileInput.click());
+    
+    // Add click handler for "Add More Files" button
+    const addMoreButton = document.getElementById('addMoreLabel');
+    if (addMoreButton) {
+        addMoreButton.addEventListener('click', () => {
+            addMoreFiles.click();
+        });
+    }
 });
 
 function handleDragOver(e) {
@@ -52,6 +60,19 @@ function handleFileSelect(event) {
 }
 
 function addFiles(files) {
+    // If we have converted files, reset to allow new files
+    if (convertedFiles.length > 0) {
+        convertedFiles = [];
+        document.getElementById('listTitle').textContent = 'Selected Files';
+        
+        // Reset convert button text
+        const convertBtn = document.getElementById('convertBtn');
+        if (convertBtn) {
+            convertBtn.textContent = 'Convert to JPG';
+            convertBtn.disabled = false;
+        }
+    }
+    
     selectedFiles = [...selectedFiles, ...files];
     updateFileList();
     showFileList();
@@ -97,6 +118,27 @@ function updateFileList() {
         
         container.appendChild(fileItem);
     });
+    
+    // Add Download All button if there are converted files
+    if (convertedFiles.length > 0) {
+        const downloadAllContainer = document.createElement('div');
+        downloadAllContainer.className = 'mt-4 pt-4 border-t border-border';
+        downloadAllContainer.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium">All Converted Files</p>
+                    <p class="text-xs text-muted-foreground">${convertedFiles.length} files ready for download</p>
+                </div>
+                <button class="btn btn-primary" onclick="downloadAll()">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Download All as ZIP
+                </button>
+            </div>
+        `;
+        container.appendChild(downloadAllContainer);
+    }
 }
 
 function showFileList() {
@@ -164,6 +206,12 @@ async function convertFiles() {
     document.getElementById('progressContainer').style.display = 'none';
     document.getElementById('listTitle').textContent = 'Converted Files';
     
+    // Show "Add More Files" button after conversion
+    const addMoreLabel = document.getElementById('addMoreLabel');
+    if (addMoreLabel) {
+        addMoreLabel.style.display = 'block';
+    }
+    
     updateFileList();
 }
 
@@ -209,10 +257,34 @@ function downloadFile(index) {
     link.click();
 }
 
-function downloadAll() {
-    convertedFiles.forEach((file, index) => {
-        setTimeout(() => downloadFile(index), index * 100);
-    });
+async function downloadAll() {
+    if (convertedFiles.length === 0) return;
+    
+    try {
+        const zip = new JSZip();
+        
+        // Add all converted files to the ZIP
+        convertedFiles.forEach((file, index) => {
+            const fileName = file.name.replace('.cr2', '.jpg');
+            zip.file(fileName, file.data);
+        });
+        
+        // Generate ZIP file
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        
+        // Create download link
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(zipBlob);
+        link.download = `converted-cr2-files-${new Date().toISOString().slice(0, 10)}.zip`;
+        link.click();
+        
+        // Clean up
+        URL.revokeObjectURL(link.href);
+        
+    } catch (error) {
+        console.error('Error creating ZIP file:', error);
+        alert('Error creating ZIP file. Please try downloading files individually.');
+    }
 }
 
 function formatFileSize(bytes) {
